@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-func TestGetAuth(t *testing.T) {
+func TestPostAuth(t *testing.T) {
 	runtime, err := newTestRuntime()
 	if err != nil {
 		t.Fatal(err)
@@ -54,12 +54,6 @@ func TestGetAuth(t *testing.T) {
 
 	if r.Code != http.StatusOK && r.Code != 0 {
 		t.Fatalf("%d OK or 0 expected, received %d\n", http.StatusOK, r.Code)
-	}
-
-	newAuthConfig := srv.registry.GetAuthConfig()
-	if newAuthConfig.Username != authConfig.Username ||
-		newAuthConfig.Email != authConfig.Email {
-		t.Fatalf("The auth configuration hasn't been set correctly")
 	}
 }
 
@@ -493,39 +487,6 @@ func TestGetContainersByName(t *testing.T) {
 	}
 	if outContainer.Id != container.Id {
 		t.Fatalf("Wrong containers retrieved. Expected %s, recieved %s", container.Id, outContainer.Id)
-	}
-}
-
-func TestPostAuth(t *testing.T) {
-	runtime, err := newTestRuntime()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer nuke(runtime)
-
-	srv := &Server{
-		runtime:  runtime,
-		registry: registry.NewRegistry(runtime.root),
-	}
-
-	authConfigOrig := &auth.AuthConfig{
-		Username: "utest",
-		Email:    "utest@yopmail.com",
-	}
-	srv.registry.ResetClient(authConfigOrig)
-
-	r := httptest.NewRecorder()
-	if err := getAuth(srv, r, nil, nil); err != nil {
-		t.Fatal(err)
-	}
-
-	authConfig := &auth.AuthConfig{}
-	if err := json.Unmarshal(r.Body.Bytes(), authConfig); err != nil {
-		t.Fatal(err)
-	}
-
-	if authConfig.Username != authConfigOrig.Username || authConfig.Email != authConfigOrig.Email {
-		t.Errorf("The retrieve auth mismatch with the one set.")
 	}
 }
 

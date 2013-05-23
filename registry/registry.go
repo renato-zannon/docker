@@ -174,15 +174,15 @@ func (r *Registry) GetRemoteTags(registries []string, repository string, token [
 	return nil, fmt.Errorf("Could not reach any registry endpoint")
 }
 
-func (r *Registry) GetRepositoryData(remote string) (*RepositoryData, error) {
+func (r *Registry) GetRepositoryData(remote string, authConfig *auth.AuthConfig) (*RepositoryData, error) {
 	repositoryTarget := auth.IndexServerAddress() + "/repositories/" + remote + "/images"
 
 	req, err := http.NewRequest("GET", repositoryTarget, nil)
 	if err != nil {
 		return nil, err
 	}
-	if r.authConfig != nil && len(r.authConfig.Username) > 0 {
-		req.SetBasicAuth(r.authConfig.Username, r.authConfig.Password)
+	if authConfig != nil && len(authConfig.Username) > 0 {
+		req.SetBasicAuth(authConfig.Username, authConfig.Password)
 	}
 	req.Header.Set("X-Docker-Token", "true")
 
@@ -321,7 +321,7 @@ func (r *Registry) PushRegistryTag(remote, revision, tag, registry string, token
 	return nil
 }
 
-func (r *Registry) PushImageJsonIndex(remote string, imgList []*ImgData, validate bool) (*RepositoryData, error) {
+func (r *Registry) PushImageJsonIndex(remote string, imgList []*ImgData, validate bool, authConfig *auth.AuthConfig) (*RepositoryData, error) {
 	imgListJson, err := json.Marshal(imgList)
 	if err != nil {
 		return nil, err
@@ -334,7 +334,7 @@ func (r *Registry) PushImageJsonIndex(remote string, imgList []*ImgData, validat
 	if err != nil {
 		return nil, err
 	}
-	req.SetBasicAuth(r.authConfig.Username, r.authConfig.Password)
+	req.SetBasicAuth(authConfig.Username, authConfig.Password)
 	req.ContentLength = int64(len(imgListJson))
 	req.Header.Set("X-Docker-Token", "true")
 
@@ -351,7 +351,7 @@ func (r *Registry) PushImageJsonIndex(remote string, imgList []*ImgData, validat
 		if err != nil {
 			return nil, err
 		}
-		req.SetBasicAuth(r.authConfig.Username, r.authConfig.Password)
+		req.SetBasicAuth(authConfig.Username, authConfig.Password)
 		req.ContentLength = int64(len(imgListJson))
 		req.Header.Set("X-Docker-Token", "true")
 
@@ -423,16 +423,8 @@ func (r *Registry) SearchRepositories(term string) (*SearchResults, error) {
 	return result, err
 }
 
-func (r *Registry) ResetClient(authConfig *auth.AuthConfig) {
-	r.authConfig = authConfig
+func (r *Registry) ResetClient() {
 	r.client.Jar = cookiejar.NewCookieJar()
-}
-
-func (r *Registry) GetAuthConfig() *auth.AuthConfig {
-	return &auth.AuthConfig{
-		Username: r.authConfig.Username,
-		Email:    r.authConfig.Email,
-	}
 }
 
 type SearchResults struct {
@@ -455,15 +447,10 @@ type ImgData struct {
 
 type Registry struct {
 	client     *http.Client
-	authConfig *auth.AuthConfig
 }
 
 func NewRegistry(root string) *Registry {
-	// If the auth file does not exist, keep going
-	authConfig, _ := auth.LoadConfig(root)
-
 	r := &Registry{
-		authConfig: authConfig,
 		client:     &http.Client{},
 	}
 	r.client.Jar = cookiejar.NewCookieJar()

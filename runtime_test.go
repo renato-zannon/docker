@@ -2,6 +2,7 @@ package docker
 
 import (
 	"fmt"
+	"github.com/dotcloud/docker/auth"
 	"github.com/dotcloud/docker/registry"
 	"github.com/dotcloud/docker/utils"
 	"io"
@@ -75,7 +76,12 @@ func init() {
 		registry: registry.NewRegistry(runtime.root),
 	}
 	// Retrieve the Image
-	if err := srv.ImagePull(unitTestImageName, "", "", os.Stdout); err != nil {
+	authConfig := &auth.AuthConfig{
+		Username: "utest",
+		Password: "utest",
+		Email:    "utest@yopmail.com",
+	}
+	if err := srv.ImagePull(unitTestImageName, "", "", os.Stdout, authConfig); err != nil {
 		panic(err)
 	}
 }

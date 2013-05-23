@@ -75,7 +75,7 @@ func DecodeAuth(authStr string) (*AuthConfig, error) {
 func LoadConfig(rootPath string) (*AuthConfig, error) {
 	confFile := path.Join(rootPath, CONFIGFILE)
 	if _, err := os.Stat(confFile); err != nil {
-		return &AuthConfig{}, fmt.Errorf("The Auth config file is missing")
+		return &AuthConfig{ rootPath : rootPath}, fmt.Errorf("The Auth config file is missing")
 	}
 	b, err := ioutil.ReadFile(confFile)
 	if err != nil {
@@ -97,13 +97,14 @@ func LoadConfig(rootPath string) (*AuthConfig, error) {
 }
 
 // save the auth config
-func saveConfig(rootPath, authStr string, email string) error {
-	confFile := path.Join(rootPath, CONFIGFILE)
-	if len(email) == 0 {
+func SaveConfig(authConfig *AuthConfig) error {
+	confFile := path.Join(authConfig.rootPath, CONFIGFILE)
+	if len(authConfig.Email) == 0 {
 		os.Remove(confFile)
 		return nil
 	}
-	lines := "auth = " + authStr + "\n" + "email = " + email + "\n"
+	authStr := EncodeAuth(authConfig)
+	lines := "auth = " + authStr + "\n" + "email = " + authConfig.Email + "\n"
 	b := []byte(lines)
 	err := ioutil.WriteFile(confFile, b, 0600)
 	if err != nil {
@@ -114,7 +115,6 @@ func saveConfig(rootPath, authStr string, email string) error {
 
 // try to register/login to the registry server
 func Login(authConfig *AuthConfig) (string, error) {
-	storeConfig := false
 	client := &http.Client{}
 	reqStatusCode := 0
 	var status string
@@ -140,7 +140,6 @@ func Login(authConfig *AuthConfig) (string, error) {
 	if reqStatusCode == 201 {
 		status = "Account created. Please use the confirmation link we sent" +
 			" to your e-mail to activate it.\n"
-		storeConfig = true
 	} else if reqStatusCode == 403 {
 		return "", fmt.Errorf("Login: Your account hasn't been activated. " +
 			"Please check your e-mail for a confirmation link.")
@@ -159,9 +158,7 @@ func Login(authConfig *AuthConfig) (string, error) {
 			}
 			if resp.StatusCode == 200 {
 				status = "Login Succeeded\n"
-				storeConfig = true
 			} else if resp.StatusCode == 401 {
-				saveConfig(authConfig.rootPath, "", "")
 				return "", fmt.Errorf("Wrong login/password, please try again")
 			} else {
 				return "", fmt.Errorf("Login: %s (Code: %d; Headers: %s)", body,
@@ -172,10 +169,6 @@ func Login(authConfig *AuthConfig) (string, error) {
 		}
 	} else {
 		return "", fmt.Errorf("Unexpected status code [%d] : %s", reqStatusCode, reqBody)
-	}
-	if storeConfig {
-		authStr := EncodeAuth(authConfig)
-		saveConfig(authConfig.rootPath, authStr, authConfig.Email)
 	}
 	return status, nil
 }

@@ -56,32 +56,15 @@ func getBoolParam(value string) (bool, error) {
 	return false, fmt.Errorf("Bad parameter")
 }
 
-func getAuth(srv *Server, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	b, err := json.Marshal(srv.registry.GetAuthConfig())
-	if err != nil {
-		return err
-	}
-	writeJson(w, b)
-	return nil
-}
-
 func postAuth(srv *Server, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	config := &auth.AuthConfig{}
-	if err := json.NewDecoder(r.Body).Decode(config); err != nil {
+	authConfig := &auth.AuthConfig{}
+	if err := json.NewDecoder(r.Body).Decode(authConfig); err != nil {
 		return err
 	}
-
-	if config.Username == srv.registry.GetAuthConfig().Username {
-		config.Password = srv.registry.GetAuthConfig().Password
-	}
-
-	newAuthConfig := auth.NewAuthConfig(config.Username, config.Password, config.Email, srv.runtime.root)
-	status, err := auth.Login(newAuthConfig)
+	status, err := auth.Login(authConfig)
 	if err != nil {
 		return err
 	}
-	srv.registry.ResetClient(newAuthConfig)
-
 	if status != "" {
 		b, err := json.Marshal(&ApiAuth{Status: status})
 		if err != nil {
@@ -287,8 +270,12 @@ func postImagesCreate(srv *Server, w http.ResponseWriter, r *http.Request, vars 
 	repo := r.Form.Get("repo")
 
 	if image != "" { //pull
+		authConfig := &auth.AuthConfig{}
+		if err := json.NewDecoder(r.Body).Decode(authConfig); err != nil {
+			return err
+		}
 		registry := r.Form.Get("registry")
-		if err := srv.ImagePull(image, tag, registry, w); err != nil {
+		if err := srv.ImagePull(image, tag, registry, w, authConfig); err != nil {
 			return err
 		}
 	} else { //import
@@ -339,6 +326,11 @@ func postImagesPush(srv *Server, w http.ResponseWriter, r *http.Request, vars ma
 	if err := parseForm(r); err != nil {
 		return err
 	}
+	authConfig := &auth.AuthConfig{}
+	if err := json.NewDecoder(r.Body).Decode(authConfig); err != nil {
+		return err
+	}
+
 	registry := r.Form.Get("registry")
 
 	if vars == nil {
@@ -346,7 +338,7 @@ func postImagesPush(srv *Server, w http.ResponseWriter, r *http.Request, vars ma
 	}
 	name := vars["name"]
 
-	if err := srv.ImagePush(name, registry, w); err != nil {
+	if err := srv.ImagePush(name, registry, w, authConfig); err != nil {
 		return err
 	}
 	return nil
@@ -591,7 +583,6 @@ func ListenAndServe(addr string, srv *Server, logging bool) error {
 
 	m := map[string]map[string]func(*Server, http.ResponseWriter, *http.Request, map[string]string) error{
 		"GET": {
-			"/auth":                         getAuth,
 			"/version":                      getVersion,
 			"/info":                         getInfo,
 			"/images/json":                  getImagesJson,

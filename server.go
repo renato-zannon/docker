@@ -327,10 +327,11 @@ func (srv *Server) pullImage(out io.Writer, imgId, registry string, token []stri
 	return nil
 }
 
-func (srv *Server) pullRepository(out io.Writer, remote, askedTag string) error {
+func (srv *Server) pullRepository(out io.Writer, remote, askedTag string, authConfig *auth.AuthConfig) error {
 	out = utils.NewWriteFlusher(out)
+	srv.registry.ResetClient()
 	fmt.Fprintf(out, "Pulling repository %s from %s\r\n", remote, auth.IndexServerAddress())
-	repoData, err := srv.registry.GetRepositoryData(remote)
+	repoData, err := srv.registry.GetRepositoryData(remote, authConfig)
 	if err != nil {
 		return err
 	}
@@ -395,7 +396,7 @@ func (srv *Server) pullRepository(out io.Writer, remote, askedTag string) error 
 	return nil
 }
 
-func (srv *Server) ImagePull(name, tag, registry string, out io.Writer) error {
+func (srv *Server) ImagePull(name, tag, registry string, out io.Writer, authConfig *auth.AuthConfig) error {
 	if registry != "" {
 		if err := srv.pullImage(out, name, registry, nil); err != nil {
 			return err
@@ -403,7 +404,7 @@ func (srv *Server) ImagePull(name, tag, registry string, out io.Writer) error {
 		return nil
 	}
 
-	if err := srv.pullRepository(out, name, tag); err != nil {
+	if err := srv.pullRepository(out, name, tag, authConfig); err != nil {
 		return err
 	}
 
@@ -476,8 +477,9 @@ func (srv *Server) getImageList(localRepo map[string]string) ([]*registry.ImgDat
 	return imgList, nil
 }
 
-func (srv *Server) pushRepository(out io.Writer, name string, localRepo map[string]string) error {
+func (srv *Server) pushRepository(out io.Writer, name string, localRepo map[string]string, authConfig *auth.AuthConfig) error {
 	out = utils.NewWriteFlusher(out)
+	srv.registry.ResetClient()
 	fmt.Fprintf(out, "Processing checksums\n")
 	imgList, err := srv.getImageList(localRepo)
 	if err != nil {
@@ -485,7 +487,7 @@ func (srv *Server) pushRepository(out io.Writer, name string, localRepo map[stri
 	}
 	fmt.Fprintf(out, "Sending image list\n")
 
-	repoData, err := srv.registry.PushImageJsonIndex(name, imgList, false)
+	repoData, err := srv.registry.PushImageJsonIndex(name, imgList, false, authConfig)
 	if err != nil {
 		return err
 	}
@@ -510,7 +512,7 @@ func (srv *Server) pushRepository(out io.Writer, name string, localRepo map[stri
 		}
 	}
 
-	if _, err := srv.registry.PushImageJsonIndex(name, imgList, true); err != nil {
+	if _, err := srv.registry.PushImageJsonIndex(name, imgList, true, authConfig); err != nil {
 		return err
 	}
 	return nil
@@ -576,14 +578,14 @@ func (srv *Server) pushImage(out io.Writer, remote, imgId, ep string, token []st
 	return nil
 }
 
-func (srv *Server) ImagePush(name, registry string, out io.Writer) error {
+func (srv *Server) ImagePush(name, registry string, out io.Writer, authConfig *auth.AuthConfig) error {
 	out = utils.NewWriteFlusher(out)
 	img, err := srv.runtime.graph.Get(name)
 	if err != nil {
 		fmt.Fprintf(out, "The push refers to a repository [%s] (len: %d)\n", name, len(srv.runtime.repositories.Repositories[name]))
 		// If it fails, try to get the repository
 		if localRepo, exists := srv.runtime.repositories.Repositories[name]; exists {
-			if err := srv.pushRepository(out, name, localRepo); err != nil {
+			if err := srv.pushRepository(out, name, localRepo, authConfig); err != nil {
 				return err
 			}
 			return nil
